@@ -35,7 +35,7 @@ def fetch_data_from_database():
     db = client['nba_stats']
     
     # creating pandas df for historical players logs
-    hist_player_stats = db['hist_player_logs']
+    hist_player_stats = db['team_gamelogs']
     player_cursor = hist_player_stats.find()
     hist_player_stats_df = pd.DataFrame(list(player_cursor))
     hist_player_stats_df = hist_player_stats_df.drop(columns='_id')
@@ -45,6 +45,17 @@ def fetch_data_from_database():
 hist_df = fetch_data_from_database()
 # -
 
+df_2016 = pd.read_csv('player_gamelogs_2016.csv',index_col=None)
+df_2017 = pd.read_csv('player_gamelogs_2017.csv',index_col=None)
+df_2018 = pd.read_csv('player_gamelogs_2018.csv',index_col=None)
+df_2019 = pd.read_csv('player_gamelogs_2019.csv',index_col=None)
+df_2020 = pd.read_csv('player_gamelogs_2020.csv',index_col=None)
+df_2021 = pd.read_csv('player_gamelogs_2021.csv',index_col=None)
+df_2022 = pd.read_csv('player_gamelogs_2022.csv',index_col=None)
+
+hist_df = pd.concat([df_2016,df_2017,df_2018,df_2019,df_2020,df_2021,df_2022], axis=0)
+
+hist_df.reset_index(drop=True, inplace=True)
 hist_df
 
 # +
@@ -69,15 +80,27 @@ hist_df['player_game_no'] = hist_df.groupby(['season_id', 'player_id']).cumcount
 hist_df['unique_id'] = hist_df.index.map(lambda _:uuid.uuid4())
 # -
 
-# ******** NEED TO UPDATE THIS TO A ROLLING IN SEASON AVERAGE ********
-hist_df['min_season_avg'] = hist_df.groupby(['season_id', 'player_id'])['min'].transform('mean')
-hist_df['pts_season_avg'] = hist_df.groupby(['season_id', 'player_id'])['pts'].transform('mean')
-hist_df['reb_season_avg'] = hist_df.groupby(['season_id', 'player_id'])['reb'].transform('mean')
-hist_df['ast_season_avg'] = hist_df.groupby(['season_id', 'player_id'])['ast'].transform('mean')
-hist_df['stl_season_avg'] = hist_df.groupby(['season_id', 'player_id'])['stl'].transform('mean')
-hist_df['blk_season_avg'] = hist_df.groupby(['season_id', 'player_id'])['blk'].transform('mean')
-hist_df['fg3m_season_avg'] = hist_df.groupby(['season_id', 'player_id'])['fg3m'].transform('mean')
+# ******** creating season rolling averages ********
+hist_df['min_season_avg'] = hist_df.groupby(['season_id', 'player_id'])['min'].transform(lambda x: x.expanding().mean())
+hist_df['pts_season_avg'] = hist_df.groupby(['season_id', 'player_id'])['pts'].transform(lambda x: x.expanding().mean())
+hist_df['reb_season_avg'] = hist_df.groupby(['season_id', 'player_id'])['reb'].transform(lambda x: x.expanding().mean())
+hist_df['ast_season_avg'] = hist_df.groupby(['season_id', 'player_id'])['ast'].transform(lambda x: x.expanding().mean())
+hist_df['stl_season_avg'] = hist_df.groupby(['season_id', 'player_id'])['stl'].transform(lambda x: x.expanding().mean())
+hist_df['blk_season_avg'] = hist_df.groupby(['season_id', 'player_id'])['blk'].transform(lambda x: x.expanding().mean())
+hist_df['fg3m_season_avg'] = hist_df.groupby(['season_id', 'player_id'])['fg3m'].transform(lambda x: x.expanding().mean())
 
-memory_usage = pts_results_df.memory_usage(deep=True).sum()
+
+# +
+avg_cols = ['min_season_avg','pts_season_avg','reb_season_avg','ast_season_avg','stl_season_avg','blk_season_avg','fg3m_season_avg']
+
+hist_df[avg_cols] = hist_df[avg_cols].round(2)
+
+hist_df.insert(0, 'unique_id', hist_df.pop('unique_id'))
+hist_df
+# -
+
+memory_usage = hist_df.memory_usage(deep=True).sum()
 memory_usage = memory_usage / (1024**2)
 memory_usage
+
+hist_df.to_csv('hist_nba_player_gamelogs_all.csv',index=False)
